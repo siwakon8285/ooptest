@@ -102,11 +102,24 @@ class DVD extends LibraryItem {
   }
 }
 
-// LibraryMember class
+// ----------------------
+// BorrowRecord
+// ----------------------
+class BorrowRecord {
+  constructor(
+    public item: LibraryItem,
+    public borrowedDate: Date,
+    public dueDate: Date
+  ) {}
+}
+
+// ----------------------
+// LibraryMember
+// ----------------------
 class LibraryMember {
   private _memberName: string;
   private _memberId: string;
-  private _borrowedItems: LibraryItem[] = [];
+  private _borrowedItems: BorrowRecord[] = [];
 
   constructor(memberName: string, memberId: string) {
     this._memberName = memberName;
@@ -122,25 +135,29 @@ class LibraryMember {
   }
 
   // Borrow an item
-  public borrowItem(item: LibraryItem): string {
+  public borrowItem(item: LibraryItem, borrowDays: number = 7): string {
     if (!item.isAvailable()) {
       return `Item not available`;
     }
     const result = item.borrow(this._memberName);
-    if (!result.startsWith("Item not available") && !result.includes("was not borrowed")) {
-      this._borrowedItems.push(item);
+    if (!result.startsWith("Item not available")) {
+      const borrowedDate = new Date();
+      const dueDate = new Date();
+      dueDate.setDate(borrowedDate.getDate() + borrowDays);
+
+      this._borrowedItems.push(new BorrowRecord(item, borrowedDate, dueDate));
     }
     return result;
   }
 
   // Return an item by itemId
   public returnItem(itemId: string): string {
-    const idx = this._borrowedItems.findIndex((it) => it.id === itemId);
+    const idx = this._borrowedItems.findIndex((r) => r.item.id === itemId);
     if (idx === -1) {
       return `Member does not have item with ID ${itemId}`;
     }
-    const item = this._borrowedItems[idx];
-    const result = item.returnItem();
+    const record = this._borrowedItems[idx];
+    const result = record.item.returnItem();
     if (result.endsWith("returned")) {
       this._borrowedItems.splice(idx, 1);
     }
@@ -152,11 +169,18 @@ class LibraryMember {
     if (this._borrowedItems.length === 0) {
       return `${this._memberName} has no borrowed items.`;
     }
-    return this._borrowedItems.map((it) => it.getDetails()).join("\n");
+    return this._borrowedItems
+      .map(
+        (r) =>
+          `${r.item.getDetails()} | Borrowed: ${r.borrowedDate.toDateString()} | Due: ${r.dueDate.toDateString()}`
+      )
+      .join("\n");
   }
 }
 
-// Library class
+// ----------------------
+// Library
+// ----------------------
 class Library {
   private items: LibraryItem[] = [];
   private members: LibraryMember[] = [];
@@ -178,7 +202,7 @@ class Library {
   }
 
   // Borrow an item
-  public borrowItem(memberId: string, itemId: string): string {
+  public borrowItem(memberId: string, itemId: string, borrowDays: number = 7): string {
     const member = this.findMemberById(memberId);
     if (!member) {
       return `Member with ID ${memberId} not found`;
@@ -187,7 +211,7 @@ class Library {
     if (!item) {
       return `Item with ID ${itemId} not found`;
     }
-    return member.borrowItem(item);
+    return member.borrowItem(item, borrowDays);
   }
 
   // Return an item
@@ -208,20 +232,26 @@ class Library {
     const itemsSummary =
       this.items.length === 0
         ? "No items in library."
-        : this.items.map((it) => `${it.getDetails()} - ${it.isAvailable() ? "Available" : "Borrowed"}`).join("\n");
+        : this.items
+            .map(
+              (it) => `${it.getDetails()} - ${it.isAvailable() ? "Available" : "Borrowed"}`
+            )
+            .join("\n");
 
     const membersSummary =
       this.members.length === 0
         ? "No members."
-        : this.members.map((m) => `${m.memberName} (ID: ${m.memberId})`).join("\n");
+        : this.members
+            .map((m) => `${m.memberName} (ID: ${m.memberId})`)
+            .join("\n");
 
     return `Library Items:\n${itemsSummary}\n\nMembers:\n${membersSummary}`;
   }
 }
 
-/* ----------------------
-   Example usage / test
-   ---------------------- */
+// ----------------------
+// Example usage / test
+// ----------------------
 const library = new Library();
 
 const book = new Book("TypeScript Guide", "B001", "John Doe");
@@ -238,9 +268,11 @@ library.addItem(dvd);
 library.addMember(memberAlice);
 library.addMember(memberBob);
 
-console.log(library.borrowItem("MEM001", "B001")); 
-console.log(library.borrowItem("MEM002", "B001")); 
+console.log(library.borrowItem("MEM001", "B001", 10)); // Alice ยืมหนังสือ 10 วัน
+console.log(library.borrowItem("MEM002", "B001"));     // Bob พยายามยืมเล่มเดียวกัน
 console.log(memberAlice.listBorrowedItems());
-console.log(library.returnItem("MEM001", "B001")); 
-console.log(library.borrowItem("MEM002", "B001")); 
+console.log(library.returnItem("MEM001", "B001"));     // Alice คืน
+console.log(library.borrowItem("MEM002", "B001", 5));  // Bob ยืมได้แล้ว
+console.log(memberBob.listBorrowedItems());
 console.log(library.getLibrarySummary());
+
